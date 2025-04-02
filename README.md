@@ -1,2 +1,2 @@
-# ddkv
-Decentralized KV storage solution
+# ddp
+Decentralized Data Protocol
