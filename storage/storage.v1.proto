@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package storage.v1;
+
+service StorageService {
+  // 获取存储节点信息
+  rpc GetStorageNodeMeta(GetStorageNodeMetaRequest) returns (GetStorageNodeMetaResponse);
+  // 获取节点提供可用的空间列表
+  rpc AvalibleSpaces(AvalibleSpacesRequest) returns (AvalibleSpacesResponse);
+  // 申请租用空间
+  rpc SpaceApply(SpaceApplyRequest) returns (SpaceApplyResponse);
+  // 获取空间元数据
+  rpc GetSpaceMeta(GetSpaceMetaRequest) returns (GetSpaceMetaResponse);
+  // 向空间写入数据
+  rpc Put(PutRequest) returns (PutResponse);
+  // 从空间读取数据
+  rpc Fetch(FetchRequest) returns (FetchResponse);
+  // 删除空间中的数据
+  rpc Remove(RemoveRequest) returns (RemoveResponse);
+}
+
+enum PermissionItem {
+  READ = 0;
+  WRITE = 1;
+  DELETE = 2;
+}
+
+enum RequestStatus {
+  SUCCESS = 200;
+}
+
+enum SpaceStatus {
+  UNKNOWN = 0;  // 枚举值必须从 0 开始
+  ACTIVE = 1;
+  INACTIVE = 2;
+  PENDING = 3;
+}
+
+// 空间信息
+message SpaceMeta {
+  required string space_id = 1;
+  required string owner_pub_key = 2;
+  required uint64 capacity = 3; // in bytes
+  required uint64 used = 4; // in bytes
+  required SpaceStatus status = 5; // ACTIVE, INACTIVE, PENDING
+  required string permission = 6;
+}
+
+message StorageMeta {
+  required string node_id = 1;
+  required string ip = 2;
+  required uint32 port = 3;
+  required string pub_key = 4;
+  required uint64 total_capacity = 5; // in bytes
+  required uint64 used_capacity = 6; // in bytes
+  repeated SpaceMeta spaces = 7;
+}
+
+// ======== 存储节点信息获取 ========
+message GetStorageNodeMetaRequest {
+  required string node_id = 1;
+}
+message GetStorageNodeMetaResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+  optional StorageMeta node = 3;
+}
+
+// ======== 空间列表获取 ========
+message AvalibleSpacesRequest {
+  required string pub_key = 1;
+  required string space_id = 2;
+}
+
+message AvalibleSpacesResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+  repeated SpaceMeta spaces = 3;
+}
+
+// ======== 申请请求 ========
+message SpaceApplyRequest {
+  required string owner_pub_key = 1; // 申请人
+  required uint64 capacity = 2; // 占用空间大小
+}
+
+message SpaceApplyResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+  required SpaceMeta space = 3;
+}
+
+// ======== 获取空间元数据 ========
+message GetSpaceMetaRequest {
+  required string space_id = 1;
+  required string owner_pub_key = 2;
+}
+
+message GetSpaceMetaResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+  optional SpaceMeta space = 3;
+}
+
+// ======== 数据存取 ========
+message PutRequest {
+  required string space_id = 1;
+  required string owner_pub_key = 2;
+  required string key = 3;
+  required bytes data = 4;
+}
+
+message PutResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+}
+
+message FetchRequest {
+  required string space_id = 1;
+  required string owner_pub_key = 2;
+  required string key = 3;
+}
+
+message FetchResponse {
+  required RequestStatus status = 1;
+  optional string message = 2;
+  optional bytes data = 3;
+}

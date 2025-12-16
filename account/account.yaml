@@ -1,0 +1,17 @@
+protocol: v1 # 协议版本
+version: 1 # 版本号, 每次修改都需要加1
+name: "ddnus" # 账号名称， 用于标识账号
+area: "cn" # 所属区域
+public_key: "xxx" # 公钥
+balance: 0 # 余额
+frozen: 0 # 冻结金额
+nonce: 0 # 交易次数
+
+storage:
+  - name: "default" # 存储名称
+    type: "ssd" # 存储类型
+    used: 0 # 已使用存储空间，单位字节
+    total: 1073741824 # 总存储空间，单位字节
+    price: 0.0000001 # 每字节每秒价格，单位DDNUS
+    status: "active" # 存储状态，active: 激活, inactive: 未激活, suspended: 暂停
+

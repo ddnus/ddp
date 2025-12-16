@@ -1,0 +1,295 @@
+syntax = "proto3";
+
+package account.v1;
+
+option go_package = "cosmoid/api/account/v1";
+
+service AccountService {
+    // 账号注册
+    rpc Register (RegisterRequest) returns (RegisterResponse);
+    // 账号登录（私钥方式）
+    rpc Login (LoginRequest) returns (LoginResponse);
+    // 密码登录（多设备支持）
+    rpc LoginWithPassword (LoginWithPasswordRequest) returns (LoginWithPasswordResponse);
+    // 设置账号密码（用于加密私钥）
+    rpc SetPassword (SetPasswordRequest) returns (SetPasswordResponse);
+    // 验证密码
+    rpc VerifyPassword (VerifyPasswordRequest) returns (VerifyPasswordResponse);
+    // 账号登出
+    rpc Logout (LogoutRequest) returns (LogoutResponse);
+    // 更新账号信息
+    rpc Update (UpdateRequest) returns (UpdateResponse);
+    // 心跳,保持客户端和账号服务端的连接和账号数据同步
+    rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+
+    // 获取账号信息
+    rpc GetAccount (GetAccountRequest) returns (GetAccountResponse);
+}
+
+// ===================== 通用定义 =====================
+
+// 通用错误码
+enum ErrorCode {
+    ERROR_CODE_UNSPECIFIED = 0;      // 未指定
+    ERROR_CODE_SUCCESS = 1;          // 成功
+    ERROR_CODE_INVALID_PARAM = 2;    // 参数错误
+    ERROR_CODE_UNAUTHORIZED = 3;     // 未授权
+    ERROR_CODE_NOT_FOUND = 4;        // 未找到
+    ERROR_CODE_ALREADY_EXISTS = 5;   // 已存在
+    ERROR_CODE_INTERNAL = 6;         // 内部错误
+    ERROR_CODE_RATE_LIMITED = 7;     // 请求过于频繁
+    ERROR_CODE_SIGNATURE_INVALID = 8;// 签名无效
+    ERROR_CODE_NONCE_MISMATCH = 9;   // Nonce不匹配
+    ERROR_CODE_VERSION_CONFLICT = 10;// 版本冲突
+}
+
+// 请求元数据
+message Metadata {
+    string request_id = 1;           // 请求ID，用于链路追踪
+    int64 timestamp = 2;             // 请求时间戳（毫秒）
+    string client_version = 3;       // 客户端版本
+    string signature = 4;            // 请求签名（使用私钥签名）
+}
+
+// 响应状态
+message ResponseStatus {
+    ErrorCode code = 1;              // 错误码
+    string message = 2;              // 错误消息
+}
+
+// ===================== 存储相关定义 =====================
+
+// 存储类型
+enum StorageType {
+    STORAGE_TYPE_UNSPECIFIED = 0;
+    STORAGE_TYPE_SSD = 1;            // SSD存储
+    STORAGE_TYPE_HDD = 2;            // HDD存储
+    STORAGE_TYPE_NVME = 3;           // NVMe存储
+}
+
+// 存储状态
+enum StorageStatus {
+    STORAGE_STATUS_UNSPECIFIED = 0;
+    STORAGE_STATUS_ACTIVE = 1;       // 活跃
+    STORAGE_STATUS_INACTIVE = 2;     // 不活跃
+    STORAGE_STATUS_SUSPENDED = 3;    // 暂停
+    STORAGE_STATUS_MAINTENANCE = 4;  // 维护中
+}
+
+// 单个存储条目
+message StorageEntry {
+    string storage_id = 1;           // 存储ID
+    string name = 2;                 // 存储名称
+    StorageType type = 3;            // 存储类型
+    int64 used = 4;                  // 已使用存储空间，单位字节
+    int64 total = 5;                 // 总存储空间，单位字节
+    double price = 6;                // 每字节每秒价格，单位 DDNUS
+    StorageStatus status = 7;        // 存储状态
+    int64 created_at = 8;            // 创建时间戳
+    int64 updated_at = 9;            // 更新时间戳
+}
+
+// ===================== 应用相关定义 =====================
+
+// 权限条目
+message PermissionEntry {
+    string permission_name = 1;      // 权限名称
+    bool granted = 2;                // 是否已授予该权限
+    int64 granted_at = 3;            // 授权时间戳
+    int64 expires_at = 4;            // 过期时间戳（0表示永不过期）
+}
+
+// 应用条目
+message AppEntry {
+    string app_id = 1;               // 应用ID
+    string name = 2;                 // 应用名称
+    string version = 3;              // 应用版本
+    int64 installed_at = 4;          // 安装时间戳
+    bool authorized = 5;             // 是否已授权
+    repeated PermissionEntry permissions = 6; // 权限列表
+    string access_token = 7;         // 访问令牌
+    int64 token_expires_at = 8;      // 令牌过期时间
+}
+
+// ===================== 账户核心定义 =====================
+
+// 账户状态
+enum AccountStatus {
+    ACCOUNT_STATUS_UNSPECIFIED = 0;
+    ACCOUNT_STATUS_PENDING = 1;      // 待激活
+    ACCOUNT_STATUS_ACTIVE = 2;       // 活跃
+    ACCOUNT_STATUS_INACTIVE = 3;     // 不活跃
+    ACCOUNT_STATUS_SUSPENDED = 4;    // 暂停
+    ACCOUNT_STATUS_BANNED = 5;       // 封禁
+}
+
+// 账户信息
+message Account {
+    int64 version = 1;               // 版本号, 每次修改都需要加1
+    string user_id = 2;              // 用户ID
+    string name = 3;                 // 账号名称，用于标识账号
+    string area = 4;                 // 所属区域
+    string public_key = 5;           // 公钥
+    int64 balance = 6;               // 余额（单位：最小货币单位）
+    int64 frozen = 7;                // 冻结金额
+    int64 nonce = 8;                 // 交易次数
+    AccountStatus status = 9;        // 账户状态
+    int64 created_at = 10;           // 创建时间戳
+    int64 updated_at = 11;           // 更新时间戳
+    int64 last_login_at = 12;        // 最后登录时间戳
+
+    // 多设备登录支持（可选字段）
+    string encrypted_private_key = 13;   // 加密后的私钥（密码登录时使用）
+    string password_salt = 14;           // 密码盐值（用于密码哈希）
+
+    repeated StorageEntry storages = 20; // 存储列表
+    repeated AppEntry apps = 21;         // 应用列表
+}
+
+// ===================== 注册相关 =====================
+
+message RegisterRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string username = 2;             // 用户名
+    string public_key = 3;           // 公钥
+    string area = 4;                 // 所属区域
+    string invite_code = 5;          // 邀请码（可选）
+}
+
+message RegisterResponse {
+    ResponseStatus status = 1;       // 响应状态
+    string user_id = 2;              // 用户ID
+    Account account = 3;             // 账户信息
+}
+
+// ===================== 登录相关 =====================
+
+message LoginRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string public_key = 2;           // 公钥（用于标识用户）
+    int64 timestamp = 3;             // 登录时间戳
+    string signature = 4;            // 使用私钥对timestamp签名，用于验证身份
+    string device_id = 5;            // 设备ID
+    string device_info = 6;          // 设备信息（JSON格式）
+}
+
+message LoginResponse {
+    ResponseStatus status = 1;       // 响应状态
+    string session_token = 2;        // 会话令牌
+    int64 session_expires_at = 3;    // 会话过期时间戳
+    Account account = 4;             // 账户信息
+    int64 server_time = 5;           // 服务器时间戳，用于同步
+}
+
+message LoginWithPasswordRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string username = 2;             // 用户名
+    string password = 3;             // 密码
+    string device_id = 4;            // 设备ID
+    string device_info = 5;          // 设备信息（JSON格式）
+}
+
+message LoginWithPasswordResponse {
+    ResponseStatus status = 1;       // 响应状态
+    string session_token = 2;        // 会话令牌
+    int64 session_expires_at = 3;    // 会话过期时间戳
+    Account account = 4;             // 账户信息
+    string encrypted_private_key = 5; // 加密后的私钥
+    int64 server_time = 6;           // 服务器时间戳
+}
+
+message SetPasswordRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    string password = 3;             // 新密码（用于加密私钥）
+    string private_key = 4;          // 私钥（需要加密存储）
+    string old_password = 5;         // 旧密码（修改密码时需要）
+}
+
+message SetPasswordResponse {
+    ResponseStatus status = 1;       // 响应状态
+}
+
+message VerifyPasswordRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    string password = 3;             // 要验证的密码
+}
+
+message VerifyPasswordResponse {
+    ResponseStatus status = 1;       // 响应状态
+}
+
+
+// ===================== 登出相关 =====================
+
+message LogoutRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    bool logout_all_devices = 3;     // 是否登出所有设备
+}
+
+message LogoutResponse {
+    ResponseStatus status = 1;       // 响应状态
+}
+
+// ===================== 更新账号相关 =====================
+
+// 更新类型
+enum UpdateType {
+    UPDATE_TYPE_UNSPECIFIED = 0;
+    UPDATE_TYPE_NAME = 1;            // 更新名称
+    UPDATE_TYPE_AREA = 2;            // 更新区域
+    UPDATE_TYPE_PUBLIC_KEY = 3;      // 更新公钥（密钥轮换）
+}
+
+message UpdateRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    int64 expected_version = 3;      // 期望的版本号（乐观锁）
+    int64 nonce = 4;                 // 交易序号
+    
+    UpdateType update_type = 5;      // 更新类型
+    string new_name = 6;             // 新名称（当update_type为UPDATE_TYPE_NAME时）
+    string new_area = 7;             // 新区域（当update_type为UPDATE_TYPE_AREA时）
+    string new_public_key = 8;       // 新公钥（当update_type为UPDATE_TYPE_PUBLIC_KEY时）
+    string old_key_signature = 9;    // 旧密钥签名（密钥轮换时需要）
+}
+
+message UpdateResponse {
+    ResponseStatus status = 1;       // 响应状态
+    Account account = 2;             // 更新后的账户信息
+}
+
+// ===================== 心跳相关 =====================
+
+message HeartbeatRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    int64 client_version = 3;        // 客户端本地账户数据版本
+    int64 last_sync_time = 4;        // 上次同步时间戳
+}
+
+message HeartbeatResponse {
+    ResponseStatus status = 1;       // 响应状态
+    int64 server_time = 2;           // 服务器时间戳
+    int64 server_version = 3;        // 服务端账户数据版本
+    bool need_sync = 4;              // 是否需要同步数据
+    Account account = 5;             // 如果need_sync为true，返回最新账户数据
+    int64 next_heartbeat_interval = 6; // 下次心跳间隔（毫秒）
+}
+
+// ===================== 获取账号相关 =====================
+
+message GetAccountRequest {
+    Metadata metadata = 1;           // 请求元数据
+    string session_token = 2;        // 会话令牌
+    // 以下字段用于查询其他用户（可选）
+    string target_user_id = 3;       // 目标用户ID
+    string target_public_key = 4;    // 目标用户公钥
+}
+
+message GetAccountResponse {
+    ResponseStatus status = 1;       // 响应状态
+    Account account = 2;             // 账户信息
+}
